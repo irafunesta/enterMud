@@ -1,0 +1,8 @@
+node_modules/
+dist/
+19315__sharesynth__8bit-video-games.zip
+*.kra
+*~
+19315__sharesynth__8bit-video-games/
+package-lock.json
+*.zip

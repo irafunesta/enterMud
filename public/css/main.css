@@ -1,0 +1,31 @@
+body
+{
+	background-color: black;
+}
+
+.canvasMain
+{
+	width: 400px;
+	height : 200px;
+	background-color: black;
+	color: white;
+	margin: auto;
+	padding-top: 100px;
+	/* padding: 10px; */
+	display: block;
+	overflow-y: scroll;
+
+}
+::-webkit-scrollbar {
+    display: none;
+}
+.cmdMain
+{
+	color:white;
+	background-color: black;
+	border: 0px;
+	width: 400px;
+	margin: auto;
+	padding: 10px;
+	display: block;
+}
