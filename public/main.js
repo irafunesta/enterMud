@@ -2,15 +2,18 @@ MG = {};
 
 ;(function () {
 	MG.lastInput = "";
+	MG.session = {id:"", name:""};
+	MG.status = "NOT_LOGGED";
 	//GSE.Init("myCanvas", 400, 400, false, InitGame, Update);
 	// var cmd = document.getElementById("cmd");
 	var mainScreen = document.getElementById("mainScreen");
 	var input = document.getElementById("cmd");
+
 	// var lastInput = ""
 
 	input.addEventListener("keyup", function(event) {
 	    event.preventDefault();
-	    if (event.keyCode === 13) {
+	    if (event.keyCode === 13 && input.value != "") {
 	        SendEvent(input.value);
 			input.value = "";
 	    }
@@ -26,11 +29,20 @@ MG = {};
 
 	MG.socket.on('error', function (err) {
 	  throw 'Socket error - ' + err;
+	  writeToConsole("Socket error - " + err);
 	});
 
-	MG.socket.on('connect', function () {
-	  console.log('CONNECTED');
-	  writeToConsole("Connected ");
+	MG.socket.on('connect', function (status) {
+		console.log('CONNECTED');
+		let token = MG.socket.getAuthToken();
+		if(token && MG.session.id == token.id && MG.session.name == token.name)
+		{
+			writeToConsole("Connected Auth");
+		}
+		else {
+			writeToConsole("Enter your name");
+			MG.status = "NOT_LOGGED";
+		}
 	});
 
 	MG.socket.on('rand', function (data) {
@@ -47,11 +59,12 @@ MG = {};
 	});
 	// var updateGameChannel = MG.socket.subscribe('updateGame');
 	var disconnectChannel = MG.socket.subscribe('p_disconnect');
-	var chChat = MG.socket.subscribe('chat');
-
-	// updateGameChannel.on('subscribeFail', function (err) {
+	// var chChat = MG.socket.subscribe('chat');
+	//
+	// chChat.on('subscribeFail', function (err) {
 	//   console.log('Failed to subscribe to the updateGame channel due to error: ' + err);
 	// });
+	// chChat.watch(recivedMsg);
 
 	disconnectChannel.on('subscribeFail', function (err) {
 	  console.log('Failed to subscribe to the p_disconnect channel due to error: ' + err);
@@ -59,23 +72,99 @@ MG = {};
 
 	// updateGameChannel.watch(UpdateFromServer);
 	disconnectChannel.watch(PlayerDisconnected);
-	chChat.watch(recivedMsg);
 	// MG.socket.on("playerUp", UpdateFromServer);
 	MG.socket.on("p_disconnect", PlayerDisconnected);
 })();
 
+function ParseCommand(msg)
+{
+	var command = {}
+	if(msg != "")
+	{
+		console.log("msg ", msg);
+		var msgParsed = msg.split(" ");
+		if(msgParsed.length > 1)
+		{
+			command.cmd = msgParsed[0];
+			command.args = msgParsed.slice(1);
+		}
+	}
+	return command;
+}
+
 function SendEvent(value)
 {
 	console.log("send ",value);
+
 	MG.lastInput = value;
-	// console.log(lastInput);
-	if(value == "getPlaylist")
+
+	if(MG.status == "NOT_LOGGED")
 	{
-		MG.socket.emit("getPlaylist");
+		MG.socket.emit("send_username", value, (err, response) => {
+			if(err) {
+				writeToConsole(err.toString());
+			}
+			else {
+				writeToConsole("Enter password");
+		  	  	MG.status = "PASSWORD";
+				//MG.session.name = ""
+			}
+
+		});
 	}
-	else if(value)
+	else if (MG.status == "PASSWORD")
 	{
-		MG.socket.emit("chatMessage", [MG.socket.id, value]);
+		//TODO sha the password
+		let cryPswd = value;
+		MG.socket.emit("send_password", cryPswd, (err, response) => {
+			if(err) {
+				writeToConsole(err.toString());
+			}
+			else {
+				writeToConsole("Welcome to EnterMUD " + response.user_name);
+		  	  	MG.status = "IN_GAME";
+				MG.session.name = response.user_name;
+				MG.session.id = response.user_name;
+
+				var chChat = MG.socket.subscribe('chat');
+				//
+				chChat.on('subscribeFail', function (err) {
+				   console.log('Failed to subscribe to the updateGame channel due to error: ' + err);
+				});
+				chChat.watch(recivedMsg);
+			}
+
+		});
+	}
+	else if(MG.status == "IN_GAME")
+	{
+		var cmd = ParseCommand(value);
+		// console.log(lastInput);
+		if(value == "getPlaylist")
+		{
+			MG.socket.emit("getPlaylist");
+		}
+		else if(cmd != undefined && cmd.cmd == "login")
+		{
+			MG.socket.emit('login', cmd.args, function (err) {
+			  // This callback handles the response from the server.
+			  // If we wanted, we could have listened to a separate 'loginResponse'
+			  // event, but this pattern of passing a callback like this
+			  // is slightly more efficient.
+
+				if (err) {
+					// showLoginError(err);
+					writeToConsole(err);
+				} else {
+					// goToMainScreen();
+					writeToConsole("User " +cmd.args[0].toString() + " logged in.");
+				}
+			});
+		}
+		else if(value)
+		{
+			MG.socket.emit("chatMessage", [MG.session.name, value]);
+		}
 	}
 }
 
@@ -145,6 +234,7 @@ function PlayerDisconnected(id)
 {
 	console.log(id, " disconnected");
 	writeToConsole(id + " disconnected");
+	MG.socket.deauthenticate();
 	// var p = GSE.Scene.GetEntity(id);
 	// if(p.tag != null | p.tag != undefined)
 	// {

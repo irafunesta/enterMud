@@ -1,32 +1,76 @@
 const sqlite3 = require('sqlite3').verbose();
+const dabaseName = "./db/mud.db";
 
 const CtrDb = {
 	db: null,
 	openCon: function openCon()
 	{
-		this.db = new sqlite3.Database('./db/chinook.db', sqlite3.OPEN_READWRITE, (err) => {
+		return new sqlite3.Database(dabaseName, sqlite3.OPEN_READWRITE, (err) => {
 		  if (err) {
 		    console.error(err.message);
 		  }
-		  console.log('Connected to the chinook database.');
+		  console.log('Connected to the mud database.');
 		});
 	},
-	query: function query(query, rowCallback)
+	queryAll: function query(query, rowCallback)
 	{
-		let db = new sqlite3.Database('./db/chinook.db', sqlite3.OPEN_READWRITE, (err) => {
-		  if (err) {
-		    console.error(err.message);
-		  }
-		  console.log('Connected to the chinook database.');
-		});
+		db = this.openCon();
 
 		db.serialize(() => {
-		  db.each(query, (err, row) => {
+		  db.all(query, [], (err, row) => {
 			if (err) {
 			  console.error(err.message);
+			  rowCallback(err, row);
 			}
-			//console.log(row.id + "\t" + row.name);
-			rowCallback(row);
+			else {
+				rowCallback(null, row);
+			}
+		  });
+		});
+
+		db.close((err) => {
+		  if (err) {
+			console.error(err.message);
+		  }
+		  console.log('Close the database connection.');
+		});
+	},
+	queryGet: function query(query, rowCallback)
+	{
+		db = this.openCon();
+
+		db.serialize(() => {
+		  db.get(query, [], (err, row) => {
+			if (err) {
+			  console.error(err.message);
+			  rowCallback(err, row);
+			}
+			else {
+				rowCallback(null, row);
+			}
+		  });
+		});
+
+		db.close((err) => {
+		  if (err) {
+			console.error(err.message);
+		  }
+		  console.log('Close the database connection.');
+		});
+	},
+	queryEach: function query(query, rowCallback)
+	{
+		db = this.openCon();
+
+		db.serialize(() => {
+		  db.each(query, [], (err, row) => {
+			if (err) {
+			  console.error(err.message);
+			  rowCallback(err, row);
+			}
+			else {
+				rowCallback(null, row);
+			}
 		  });
 		});
 

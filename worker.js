@@ -20,6 +20,27 @@ class Worker extends SCWorker {
 
 	this.scServer.setCodecEngine(scCodecMinBin);
 
+	this.scServer.addMiddleware(scServer.MIDDLEWARE_PUBLISH_OUT,
+	  function (req, next) {
+	    // ...
+		// console.log(req);
+
+		let token = req.socket.getAuthToken().socId;
+		let socketId = req.socket.id;
+
+		console.log("token", token);
+		console.log("socketId", socketId);
+
+	    if (token && socketId && token.socId != socketId) {
+	      next(); // Allow
+	    } else {
+	      var err = MyCustomPublishOutFailedError('Blocked publishing message out to ' + req.socket.id);
+	      next(err); // Block with notice
+	      // next(true); // Passing true to next() blocks quietly (without raising a warning on the server-side)
+	    }
+	  }
+	);
+
     if (environment === 'dev') {
       // Log every HTTP request. See https://github.com/expressjs/morgan for other
       // available formats.
@@ -53,7 +74,7 @@ class Worker extends SCWorker {
 	var roomW = 400;
 	var roomH = 400;
 	var socketAuth = false;
-
+	var logged_users = [];
     /*
       In here we handle our incoming realtime connections and listen for events.
 	  // Some sample logic to show how to handle client events,
@@ -104,32 +125,87 @@ class Worker extends SCWorker {
 		socket.on('chatMessage', function (data) {
 			var c = ParseCommand(data[1]);
 			console.log("command ", c);
-			if(socketAuth == true)
+			if(socket.authToken != null && socket.authToken.user_name == data[0])
 			{
-				console.log("auth true");
-				socket.exchange.publish('chat', socket.id +": " + data[1]);
+				// console.log("auth true");
+				socket.exchange.publish('chat', data[0] +": " + data[1]);
 			}
 			else
 			{
-				if(c.cmd && c.cmd == "login")
+				socket.emit('noAuth');
+			}
+		});
+
+		// socket.on("login", function(args, respond)
+		// {
+		// 	//chek user login
+		// 	if(args[0] == "ira" && args[1] == "pswd")
+		// 	{
+		// 		respond();
+		// 		// This will give the client a token so that they won't
+      	// 		// have to login again if they lose their connection
+      	// 		// or revisit the app at a later time.
+      	// 		socket.setAuthToken({username: args[0]});
+		// 		socket.exchange.publish('chat', args [0] + " logged in");
+		// 	}
+		// 	else {
+		// 		 // Passing string as first argument indicates error
+		// 		respond('Login username or password incorrect');
+		// 	}
+		// });
+
+		socket.on("send_username", (username, respond) => {
+			//Check if username is present in the db
+			var query = "SELECT user_id, user_name FROM users WHERE user_name = '" + username +"'";
+			databaseCtrl.queryGet(query, (err, row) => {
+				if(err)
 				{
-					/*
-						Get the username and password and find a match
-					*/
-					if(c.args[0] == "ira" && c.args[1] == "pswd")
-					{
-						socketAuth = true;
-						socket.emit("rand",'login successful');
-					}
-					else {
-						socket.emit("rand", "pswd or username not valid");
-					}
+					console.log(err);
+					//socket.emit("rand", err);
+					respond(err);
 				}
 				else
 				{
-					socket.emit('noAuth');
+					if(row) {
+						if(logged_users.indexOf(row.user_name) == -1) {
+							respond(null, row.user_name);
+						}
+						else {
+							respond("User already logged in.");
+						}
+					}
+					else {
+						respond("Username not found.");
+					}
 				}
-			}
+			});
+		});
+
+		socket.on("send_password", (cryPswd, respond) => {
+			//Check if username is present in the db
+			var query = "SELECT user_id, user_name FROM users WHERE password = '" + cryPswd +"'";
+			databaseCtrl.queryGet(query, (err, row) => {
+				if(err)
+				{
+					console.log(err);
+					//socket.emit("rand", err);
+					respond(err);
+				}
+				else
+				{
+					if(row) {
+						let username = row.user_name;
+						respond(null, {"user_name":username, "id":username});
+						socket.setAuthToken({"user_name":username, "socId":socket.id});
+						logged_users.push(username);
+						socket.exchange.publish('chat', username + " logged in.");
+					}
+					else {
+						respond("Wrong Password.");
+						//socket.emit("rand", "Wrong Password");
+					}
+				}
+			});
 		});
 		//
 		// var interval = setInterval(function () {
@@ -139,15 +215,20 @@ class Worker extends SCWorker {
 		socket.on('disconnect', function () {
 			// clearInterval(interval);
 			console.log("player disconnect", socket.id);
-			var pid = 0
-			var currentPlayer = players.find(function(p,i)
-			{
-				pid = i;
-				return p.id == socket.id
-			});
-			players.splice(pid, 1);
-			//io.emit("playerUp", {"players":players,"current":socket.id});
-			socket.exchange.publish('p_disconnect', socket.id);
+			let sid = socket.getAuthToken();
+			if(sid && sid.user_name) {
+				var pid = -1
+				var currentPlayer = logged_users.find(function(p,i)
+				{
+					pid = i;
+					return p == socket.getAuthToken().user_name;
+				});
+
+				if(pid != -1) {
+					players.splice(pid, 1);
+				}
+				socket.exchange.publish('p_disconnect', socket.getAuthToken().user_name);
+			}
 		});
     });
   }
