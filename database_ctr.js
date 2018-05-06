@@ -84,6 +84,35 @@ const CtrDb = {
 	closeCon: function closeCon()
 	{
 		this.db.close()
+	},
+	insert: function insert(query, values, rowCallback)
+	{
+		let placeholders = values.map((value) => '(?)').join(',');
+		let sql = query + "(?,?)";
+		//let sql = query + placeholders;
+		console.log("insert q: ", sql);
+		console.log("values: ", values);
+		db = this.openCon();
+
+		db.run(sql, values, function(err) {
+	    if (err) {
+	      console.log(err.message);
+				rowCallback(err, this.lastID);
+	    }
+			else
+			{
+				// get the last insert id
+		    console.log(`A row has been inserted with rowid ${this.lastID}`);
+				rowCallback(null, this.lastID);
+			}
+	  });
+
+		db.close((err) => {
+		  if (err) {
+			console.error(err.message);
+		  }
+		  console.log('Close the database connection.');
+		});
 	}
 }
 

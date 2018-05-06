@@ -10,6 +10,7 @@ MG = {};
 	var input = document.getElementById("cmd");
 
 	// var lastInput = ""
+	let x = 100;
 
 	input.addEventListener("keyup", function(event) {
 	    event.preventDefault();
@@ -35,9 +36,10 @@ MG = {};
 	MG.socket.on('connect', function (status) {
 		console.log('CONNECTED');
 		let token = MG.socket.getAuthToken();
-		if(token && MG.session.id == token.id && MG.session.name == token.name)
+		if(token && token.socId == MG.socket.id)
 		{
-			writeToConsole("Connected Auth");
+			writeToConsole("User " + token.user_name + " already logged in.");
+			MG.status = "IN_GAME";
 		}
 		else {
 			writeToConsole("Enter your name");
@@ -73,8 +75,16 @@ MG = {};
 	// updateGameChannel.watch(UpdateFromServer);
 	disconnectChannel.watch(PlayerDisconnected);
 	// MG.socket.on("playerUp", UpdateFromServer);
-	MG.socket.on("p_disconnect", PlayerDisconnected);
+	// MG.socket.on("p_disconnect", PlayerDisconnected);
+	MG.socket.on("deauth_client", () => {
+		console.log("deauthenticate client");
+		MG.socket.deauthenticate();
+		//TODO do other stuff
+	});
+
 })();
+
+// console.log(x);
 
 function ParseCommand(msg)
 {
@@ -95,21 +105,75 @@ function ParseCommand(msg)
 function SendEvent(value)
 {
 	console.log("send ",value);
-
+	var cmd = ParseCommand(value);
 	MG.lastInput = value;
 
 	if(MG.status == "NOT_LOGGED")
 	{
-		MG.socket.emit("send_username", value, (err, response) => {
-			if(err) {
-				writeToConsole(err.toString());
-			}
-			else {
-				writeToConsole("Enter password");
-		  	  	MG.status = "PASSWORD";
-				//MG.session.name = ""
-			}
+		if(cmd.cmd == "reg" && cmd.args.length > 0)
+		{
 
+			MG.socket.emit("register_username", cmd.args[0], (err, response) => {
+				if(err)
+				{
+					switch(err)
+					{
+						case "E001":
+							//Username already taken
+							writeToConsole(response.toString());
+							MG.status = "SELECT_USERNAME";
+							break;
+						default:
+							writeToConsole(err.toString());
+							break;
+					}
+				}
+				else
+				{
+					writeToConsole(response);
+					MG.reg_user_name = cmd.args[0];
+					writeToConsole("Enter new password");
+				  MG.status = "REG_PASSWORD";
+				}
+			});
+		}
+		else
+		{
+			MG.socket.emit("send_username", value, (err, response) => {
+				if(err) {
+					writeToConsole(err.toString());
+				}
+				else {
+					writeToConsole("Enter password");
+			  	MG.status = "PASSWORD";
+					//MG.session.name = ""
+				}
+			});
+		}
+	}
+	else if (MG.status == "SELECT_USERNAME")
+	{
+		MG.socket.emit("register_username", value, (err, response) => {
+			if(err)
+			{
+				switch(err)
+				{
+					case "E001":
+						//Username already taken
+						writeToConsole(response.toString());
+						MG.status = "SELECT_USERNAME";
+						break;
+					default:
+						writeToConsole(err.toString());
+						break;
+				}
+			}
+			else
+			{
+				MG.reg_user_name = cmd.args[0];
+				writeToConsole("Enter new password");
+				MG.status = "REG_PASSWORD";
+			}
 		});
 	}
 	else if (MG.status == "PASSWORD")
@@ -122,7 +186,7 @@ function SendEvent(value)
 			}
 			else {
 				writeToConsole("Welcome to EnterMUD " + response.user_name);
-		  	  	MG.status = "IN_GAME";
+		  	MG.status = "IN_GAME";
 				MG.session.name = response.user_name;
 				MG.session.id = response.user_name;
 
@@ -133,12 +197,38 @@ function SendEvent(value)
 				});
 				chChat.watch(recivedMsg);
 			}
+		});
+	}
+	else if(MG.status == "REG_PASSWORD")
+	{
+		//send the password for the user
+		var user = {
+			"user_name": MG.reg_user_name,
+			"pswd": value
+		}
+		MG.socket.emit("register_pswd", user, (err, response) => {
+			if(err)
+			{
+				writeToConsole(err.toString());
+			}
+			else
+			{
+				writeToConsole("Welcome to EnterMUD " + response.user_name);
+		  	MG.status = "IN_GAME";
+				// MG.session.name = response.user_name;
+				// MG.session.id = response.user_name;
 
+				var chChat = MG.socket.subscribe('chat');
+				//
+				chChat.on('subscribeFail', function (err) {
+				   console.log('Failed to subscribe to the updateGame channel due to error: ' + err);
+				});
+				chChat.watch(recivedMsg);
+			}
 		});
 	}
 	else if(MG.status == "IN_GAME")
 	{
-		var cmd = ParseCommand(value);
 		// console.log(lastInput);
 		if(value == "getPlaylist")
 		{
@@ -163,7 +253,19 @@ function SendEvent(value)
 		}
 		else if(value)
 		{
-			MG.socket.emit("chatMessage", [MG.session.name, value]);
+			var token = MG.socket.getAuthToken();
+			if(token)
+			{
+				MG.socket.emit("chatMessage", [token.user_name, value]);
+				writeToConsole("you : " + value);
+			}
+			else
+			{
+				//User logged out
+				MG.status = "NOT_LOGGED";
+				// MG.socket.deauthenticate();
+				writeToConsole("Enter your name");
+			}
 		}
 	}
 }
@@ -173,10 +275,10 @@ function updateScroll(){
     element.scrollTop = element.scrollHeight;
 }
 
-function recivedMsg(data)
+function recivedMsg(resp)
 {
-	console.log(data);
-	writeToConsole(data);
+	console.log(resp);
+	writeToConsole(resp.data);
 }
 
 function writeToConsole(msg)
@@ -187,6 +289,11 @@ function writeToConsole(msg)
 	//mainScreen.firstElementChild()
 	mainScreen.appendChild(p);
 	updateScroll();
+}
+
+function clearConsole()
+{
+
 }
 
 function SendPlayerPos(pos)
@@ -234,7 +341,7 @@ function PlayerDisconnected(id)
 {
 	console.log(id, " disconnected");
 	writeToConsole(id + " disconnected");
-	MG.socket.deauthenticate();
+	//MG.socket.deauthenticate();
 	// var p = GSE.Scene.GetEntity(id);
 	// if(p.tag != null | p.tag != undefined)
 	// {
