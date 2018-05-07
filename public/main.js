@@ -98,6 +98,10 @@ function ParseCommand(msg)
 			command.cmd = msgParsed[0];
 			command.args = msgParsed.slice(1);
 		}
+		else if(msgParsed.length == 1)
+		{
+			command.cmd = msgParsed[0];
+		}
 	}
 	return command;
 }
@@ -234,22 +238,49 @@ function SendEvent(value)
 		{
 			MG.socket.emit("getPlaylist");
 		}
-		else if(cmd != undefined && cmd.cmd == "login")
+		else if(cmd != undefined && cmd.cmd != undefined)
 		{
-			MG.socket.emit('login', cmd.args, function (err) {
-			  // This callback handles the response from the server.
-			  // If we wanted, we could have listened to a separate 'loginResponse'
-			  // event, but this pattern of passing a callback like this
-			  // is slightly more efficient.
-
-				if (err) {
-					// showLoginError(err);
-					writeToConsole(err);
-				} else {
-					// goToMainScreen();
-					writeToConsole("User " +cmd.args[0].toString() + " logged in.");
-				}
-			});
+			switch(cmd.cmd)
+			{
+				case "north":
+				case "n":
+					MG.socket.emit("north", cmd.args, (err, response) => {
+						if(err)
+						{
+							writeToConsole("An error occured " + err.toString());
+						}						
+					});
+					break;
+				default:
+					var token = MG.socket.getAuthToken();
+					if(token)
+					{
+						MG.socket.emit("chatMessage", [token.user_name, value]);
+						writeToConsole("you : " + value);
+					}
+					else
+					{
+						//User logged out
+						MG.status = "NOT_LOGGED";
+						// MG.socket.deauthenticate();
+						writeToConsole("Enter your name");
+					}
+					break;
+			}
+			// MG.socket.emit('login', cmd.args, function (err) {
+			//   // This callback handles the response from the server.
+			//   // If we wanted, we could have listened to a separate 'loginResponse'
+			//   // event, but this pattern of passing a callback like this
+			//   // is slightly more efficient.
+			//
+			// 	if (err) {
+			// 		// showLoginError(err);
+			// 		writeToConsole(err);
+			// 	} else {
+			// 		// goToMainScreen();
+			// 		writeToConsole("User " +cmd.args[0].toString() + " logged in.");
+			// 	}
+			// });
 		}
 		else if(value)
 		{

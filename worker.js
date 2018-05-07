@@ -77,25 +77,61 @@ class Worker extends SCWorker {
 			return command;
 		}
 
+
     var count = 0;
-		var players = [];
-		var roomW = 400;
-		var roomH = 400;
+		// var players = [];
+		// var roomW = 400;
+		// var roomH = 400;
+		var rooms = [{
+			"id": 0,
+			"name": "Old City Center",
+			"desc": "You are in the old city Center",
+			"actors": [],
+			"north": 1
+		},{
+			"id": 1,
+			"name": "Old City Fountain",
+			"desc": "You are in the old city fountain",
+			"actors": [],
+			"south": 0
+		}];
 		// var socketAuth = false;
 		var logged_users = [];
+		var tmp_user_name = "";
     /*
       In here we handle our incoming realtime connections and listen for events.
 	  // Some sample logic to show how to handle client events,
 	  // replace this with your own logic
     */
     scServer.on('connection', function (socket) {
-			players.push ({
-				"id":socket.id,
-				"pos": {
-					x: 200,
-					y: 200
-				}
-			});
+
+			function EnterRoom(actor, room_id)
+			{
+				let query = `SELECT * FROM rooms WHERE room_id = ${room_id}`;
+
+				databaseCtrl.queryGet(query, (err, row) => {
+					if(err)
+					{
+						console.log(err);
+						//socket.emit("rand", err);
+						respond(err);
+					}
+					else
+					{
+						console.log("Retreived rooms: ", row);
+						if(row) {
+							//The next room exist
+							let user = logged_users.find((user) => {
+								return user.socId == socket.id;
+							});
+							user.room = row.room_id;
+							//EnterRoom(user, row.exit_n);
+							socket.emit("rand", row.desc);
+						}
+					}
+				});
+				//room.actors.push(actor);
+			}
 
 			console.log("a socket connected ", socket.id);
 			//Check if user is authenticated
@@ -126,6 +162,50 @@ class Worker extends SCWorker {
 			socket.on("askUpdate", function () {
 				// socket.emit("playerUp", {"players":players,"current":socket.id});
 				socket.exchange.publish('updateGame', {"players":players,"current":socket.id});
+			}) ;
+
+			socket.on("north", function (data, respond) {
+				// socket.emit("playerUp", {"players":players,"current":socket.id});
+				//TODO move to the north exit
+				let user = logged_users.find((user) => {
+					return user.socId == socket.id;
+				});
+				let query = "SELECT * FROM rooms WHERE room_id = " + user.room;
+
+				databaseCtrl.queryGet(query, (err, row) => {
+					if(err)
+					{
+						console.log(err);
+						//socket.emit("rand", err);
+						respond(err);
+					}
+					else
+					{
+						console.log("Retreived rooms: ", row);
+						if(row) {
+							//The next room exist
+							user.room = row.room_id;
+
+							EnterRoom(user, row.exit_n);
+							respond(null);
+						}
+						else {
+							respond("Room doesn't exist");
+						}
+					}
+				});
+
+			  // let p_room = rooms[user.room];
+				// if(p_room.north != undefined && p_room.north >= 0)
+				// {
+				// 	//Move player to the next room
+				// 	user.room = p_room.north;
+				// 	EnterRoom(user, p_room.north);
+				// }
+				// else
+				// {
+				// 	socket.emit("rand", "No exit north");
+				// }
 			}) ;
 
 			socket.on("move", function(pos) {
@@ -198,6 +278,7 @@ class Worker extends SCWorker {
 							else
 							{
 								respond(null, row.user_name);
+								tmp_user_name = row.user_name;
 							}
 						}
 						else {
@@ -257,7 +338,10 @@ class Worker extends SCWorker {
 							let username = new_user_name;
 							respond(null, {"user_name":username, "id":username});
 							socket.setAuthToken({"user_name":username, "socId":socket.id});
-							logged_users.push({"user_name":username, "socId":socket.id});
+							logged_users.push({"user_name":username, "socId":socket.id, "room":1});
+
+							EnterRoom(logged_users[logged_users.length-1], 1);
+
 							console.log("user ", username, " logged in");
 							publishChat(socket, username + " logged in.");
 						}
@@ -268,8 +352,10 @@ class Worker extends SCWorker {
 			socket.on("send_password", (pswd, respond) => {
 				//let cryPswd =
 				let cryPswd = saltPswd(salt, pswd);
+				console.log("tmp user_name: ", tmp_user_name);
 				//Check if username is present in the db
-				var query = "SELECT user_id, user_name FROM users WHERE password = '" + cryPswd +"'";
+				var query = `SELECT user_id, user_name, room FROM users WHERE password = '${cryPswd}'
+					AND user_name = '${tmp_user_name}'`;
 				databaseCtrl.queryGet(query, (err, row) => {
 					if(err)
 					{
@@ -284,9 +370,13 @@ class Worker extends SCWorker {
 							respond(null, {"user_name":username, "id":username});
 							socket.setAuthToken({"user_name":username, "socId":socket.id});
 							// socketAuth = true;
-							logged_users.push({"user_name":username, "socId":socket.id});
+							logged_users.push({"user_name":username, "socId":socket.id, "room":row.room});
+
+							EnterRoom(logged_users[logged_users.length-1], row.room);
+
 							console.log("user ", username, " logged in");
 							publishChat(socket, username + " logged in.");
+							tmp_user_name = "";
 						}
 						else {
 							respond("Wrong Password.");
@@ -316,6 +406,14 @@ class Worker extends SCWorker {
 
 					if(pid != -1) {
 						console.log("remove logged player");
+						let log_user = logged_users[pid];
+						//TODO save last room and stuff
+						databaseCtrl.update("UPDATE users SET room = ? WHERE user_name = " + log_user.user_name, [log_user.room], (err, last_id) => {
+							if(err)
+							{
+								console.log("Error updating user ",log_user.user_name,"last room ", err);
+							}
+						});
 						logged_users.splice(pid, 1);
 						console.log("logged in players: ", logged_users);
 					}
