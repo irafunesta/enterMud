@@ -164,7 +164,7 @@ class Worker extends SCWorker {
 				socket.exchange.publish('updateGame', {"players":players,"current":socket.id});
 			}) ;
 
-			socket.on("north", function (data, respond) {
+			socket.on("move", function (direction, respond) {
 				// socket.emit("playerUp", {"players":players,"current":socket.id});
 				//TODO move to the north exit
 				let user = logged_users.find((user) => {
@@ -185,46 +185,57 @@ class Worker extends SCWorker {
 						if(row) {
 							//The next room exist
 							user.room = row.room_id;
+							let next_room = 0;
+							switch(direction)
+							{
+								case "north":
+									next_room = row.exit_n;
+									break;
+								case "south":
+									next_room = row.exit_s;
+									break;
+								case "est":
+									next_room = row.exit_e;
+									break;
+								case "west":
+									next_room = row.exit_w;
+									break;
+							}
 
-							EnterRoom(user, row.exit_n);
-							respond(null);
+							if(next_room == 0 || next_room == -1)
+							{
+								respond(null, "The path " + direction + " is blocked.");
+							}
+							else
+							{
+								EnterRoom(user, next_room);
+								respond(null, "You take the " + direction + "path.");
+							}
 						}
 						else {
 							respond("Room doesn't exist");
 						}
 					}
 				});
-
-			  // let p_room = rooms[user.room];
-				// if(p_room.north != undefined && p_room.north >= 0)
-				// {
-				// 	//Move player to the next room
-				// 	user.room = p_room.north;
-				// 	EnterRoom(user, p_room.north);
-				// }
-				// else
-				// {
-				// 	socket.emit("rand", "No exit north");
-				// }
 			}) ;
 
-			socket.on("move", function(pos) {
-			  //console.log("move: " + pos, socket.id);
-			  var currentPlayer = players.find(function(p)
-			  {
-				  return p.id == socket.id
-			  });
-
-			  var data = {};
-			  if(pos.x > 0 && pos.x < roomW - 32 && pos.y > 0 && pos.y < roomH - 32)
-			  {
-				currentPlayer.pos = pos;
-			  }
-
-			  // currentPlayer.id;
-
-			  //socket.emit("playerUp", {"players":players,"current":socket.id});
-			});
+			// socket.on("move", function(pos) {
+			//   //console.log("move: " + pos, socket.id);
+			//   var currentPlayer = players.find(function(p)
+			//   {
+			// 	  return p.id == socket.id
+			//   });
+			//
+			//   var data = {};
+			//   if(pos.x > 0 && pos.x < roomW - 32 && pos.y > 0 && pos.y < roomH - 32)
+			//   {
+			// 	currentPlayer.pos = pos;
+			//   }
+			//
+			//   // currentPlayer.id;
+			//
+			//   //socket.emit("playerUp", {"players":players,"current":socket.id});
+			// });
 
 			socket.on("getPlaylist", (data) => {
 				var query = "SELECT PlaylistId as id, Name as name FROM playlists";

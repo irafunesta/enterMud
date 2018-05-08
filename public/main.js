@@ -106,6 +106,20 @@ function ParseCommand(msg)
 	return command;
 }
 
+function MovePlayer(direction)
+{
+	MG.socket.emit("move", direction, (err, response) => {
+		if(err)
+		{
+			writeToConsole("An error occured " + err.toString());
+		}
+		else
+		{
+			writeToConsole(response);
+		}
+	});
+}
+
 function SendEvent(value)
 {
 	console.log("send ",value);
@@ -244,12 +258,19 @@ function SendEvent(value)
 			{
 				case "north":
 				case "n":
-					MG.socket.emit("north", cmd.args, (err, response) => {
-						if(err)
-						{
-							writeToConsole("An error occured " + err.toString());
-						}						
-					});
+					MovePlayer("north");
+					break;
+				case "south":
+				case "s":
+					MovePlayer("south");
+					break;
+				case "est":
+				case "e":
+					MovePlayer("est");
+					break;
+				case "west":
+				case "w":
+					MovePlayer("west");
 					break;
 				default:
 					var token = MG.socket.getAuthToken();
@@ -282,22 +303,22 @@ function SendEvent(value)
 			// 	}
 			// });
 		}
-		else if(value)
-		{
-			var token = MG.socket.getAuthToken();
-			if(token)
-			{
-				MG.socket.emit("chatMessage", [token.user_name, value]);
-				writeToConsole("you : " + value);
-			}
-			else
-			{
-				//User logged out
-				MG.status = "NOT_LOGGED";
-				// MG.socket.deauthenticate();
-				writeToConsole("Enter your name");
-			}
-		}
+		// else if(value)
+		// {
+		// 	var token = MG.socket.getAuthToken();
+		// 	if(token)
+		// 	{
+		// 		MG.socket.emit("chatMessage", [token.user_name, value]);
+		// 		writeToConsole("you : " + value);
+		// 	}
+		// 	else
+		// 	{
+		// 		//User logged out
+		// 		MG.status = "NOT_LOGGED";
+		// 		// MG.socket.deauthenticate();
+		// 		writeToConsole("Enter your name");
+		// 	}
+		// }
 	}
 }
 
