@@ -247,12 +247,7 @@ function SendEvent(value)
 	}
 	else if(MG.status == "IN_GAME")
 	{
-		// console.log(lastInput);
-		if(value == "getPlaylist")
-		{
-			MG.socket.emit("getPlaylist");
-		}
-		else if(cmd != undefined && cmd.cmd != undefined)
+		if(cmd != undefined && cmd.cmd != undefined)
 		{
 			switch(cmd.cmd)
 			{
@@ -272,6 +267,9 @@ function SendEvent(value)
 				case "w":
 					MovePlayer("west");
 					break;
+				case "mkr":
+					MG.socket.emit("make_room");
+					break;
 				default:
 					var token = MG.socket.getAuthToken();
 					if(token)
@@ -288,37 +286,7 @@ function SendEvent(value)
 					}
 					break;
 			}
-			// MG.socket.emit('login', cmd.args, function (err) {
-			//   // This callback handles the response from the server.
-			//   // If we wanted, we could have listened to a separate 'loginResponse'
-			//   // event, but this pattern of passing a callback like this
-			//   // is slightly more efficient.
-			//
-			// 	if (err) {
-			// 		// showLoginError(err);
-			// 		writeToConsole(err);
-			// 	} else {
-			// 		// goToMainScreen();
-			// 		writeToConsole("User " +cmd.args[0].toString() + " logged in.");
-			// 	}
-			// });
 		}
-		// else if(value)
-		// {
-		// 	var token = MG.socket.getAuthToken();
-		// 	if(token)
-		// 	{
-		// 		MG.socket.emit("chatMessage", [token.user_name, value]);
-		// 		writeToConsole("you : " + value);
-		// 	}
-		// 	else
-		// 	{
-		// 		//User logged out
-		// 		MG.status = "NOT_LOGGED";
-		// 		// MG.socket.deauthenticate();
-		// 		writeToConsole("Enter your name");
-		// 	}
-		// }
 	}
 }
 

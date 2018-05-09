@@ -89,7 +89,7 @@ const CtrDb = {
 	insert: function insert(query, values, rowCallback)
 	{
 		let placeholders = values.map((value) => '(?)').join(',');
-		let sql = query + "(?,?)";
+		let sql = query;
 		//let sql = query + placeholders;
 		console.log("insert q: ", sql);
 		console.log("values: ", values);
@@ -143,6 +143,22 @@ const CtrDb = {
 		  }
 		  console.log('Close the database connection.');
 		});
+	},
+	createRoom(name, description, exit_n, exit_s, exit_e, exit_w, call_back)
+	{
+		let query = `INSERT INTO rooms(name, desc, exit_n, exit_s, exit_e, exit_w)
+		VALUES (?, ?, ?, ?, ?, ?)`;
+		let values = [name, description, exit_n, exit_s, exit_e, exit_w];
+
+		this.insert(query, values, call_back);
+	},
+	createUser(user_name, password, room, call_back)
+	{
+		let query = `INSERT INTO users(user_name, password, room)
+		VALUES (?, ?, ?)`;
+		let values = [user_name, password, room];
+
+		this.insert(query, values, call_back);
 	}
 }
 

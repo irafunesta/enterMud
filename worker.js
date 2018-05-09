@@ -133,6 +133,40 @@ class Worker extends SCWorker {
 				//room.actors.push(actor);
 			}
 
+			function CreateAndEnterRoom(user, current_room, direction)
+			{
+				//Create a new room, with a random descriptio + stuff
+				//choose a random exit
+
+
+				switch(direction)
+				{
+					case "north":
+						//Check rooms est west for their north exit_s
+						if (current_room.exit_s == -1 &&
+								current_room.exit_w == -1 &&
+								current_room.exit_e == -1 )
+						{
+							//The room has no adiacents rooms
+
+						}
+						else
+						{
+
+						}
+						break;
+					case "south":
+						//Check rooms est west for their south exit_s
+						break;
+					case "est":
+
+						break;
+					case "west":
+
+						break;
+				}
+			}
+
 			console.log("a socket connected ", socket.id);
 			//Check if user is authenticated
 			// let auth_token = socket.getAuthToken();
@@ -185,30 +219,34 @@ class Worker extends SCWorker {
 						if(row) {
 							//The next room exist
 							user.room = row.room_id;
-							let next_room = 0;
+							let next_room_id = 0;
 							switch(direction)
 							{
 								case "north":
-									next_room = row.exit_n;
+									next_room_id = row.exit_n;
 									break;
 								case "south":
-									next_room = row.exit_s;
+									next_room_id = row.exit_s;
 									break;
 								case "est":
-									next_room = row.exit_e;
+									next_room_id = row.exit_e;
 									break;
 								case "west":
-									next_room = row.exit_w;
+									next_room_id = row.exit_w;
 									break;
 							}
 
-							if(next_room == 0 || next_room == -1)
+							if(next_room_id == -1)
+							{
+								CreateAndEnterRoom(user, row, next_room_id);
+							}
+							else if (next_room_id == 0)
 							{
 								respond(null, "The path " + direction + " is blocked.");
 							}
 							else
 							{
-								EnterRoom(user, next_room);
+								EnterRoom(user, next_room_id);
 								respond(null, "You take the " + direction + "path.");
 							}
 						}
@@ -218,6 +256,14 @@ class Worker extends SCWorker {
 					}
 				});
 			}) ;
+
+			socket.on("make_room", (err, data) => {
+				databaseCtrl.createRoom("test", "desc_test", 0, 0, 0, 0, (err, data) => {
+					if(err){
+						console.log(err);
+					}
+				});
+			});
 
 			// socket.on("move", function(pos) {
 			//   //console.log("move: " + pos, socket.id);
@@ -333,7 +379,7 @@ class Worker extends SCWorker {
 				//var query = "SELECT user_id, user_name FROM users WHERE user_name = '" + username +"'";
 				let query = 'INSERT INTO users(user_name, password) VALUES ';
 
-				databaseCtrl.insert(query, [new_user_name, crypt_pswd], (err, lastID) => {
+				databaseCtrl.createUser(new_user_name, crypt_pswd, 1, (err, lastID) => {
 					if(err)
 					{
 						console.log(err);
