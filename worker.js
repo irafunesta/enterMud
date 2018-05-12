@@ -125,6 +125,10 @@ class Worker extends SCWorker {
 								return user.socId == socket.id;
 							});
 							user.room = row.room_id;
+
+							databaseCtrl.updateUserRoom(user.user_name, row.room_id, (err, d) => {
+								if(err) console.log("err: ", err);
+							});
 							//EnterRoom(user, row.exit_n);
 							socket.emit("rand", row.desc);
 						}
@@ -137,34 +141,97 @@ class Worker extends SCWorker {
 			{
 				//Create a new room, with a random descriptio + stuff
 				//choose a random exit
+				let exits = [-1,-1,-1,-1]; //n,s,e,w
 
+				// for (let i in exits)
+				// {
+				// 		exits[i] = -1;
+				// }
 
+				// let x = 0;
+				let new_y = current_room.y;
+				let new_x = current_room.x;
+
+				console.log("---------------------------------------------");
+				console.log("exits: ", exits );
+				console.log("---------------------------------------------");
+				//last room exit direction
 				switch(direction)
 				{
-					case "north":
-						//Check rooms est west for their north exit_s
-						if (current_room.exit_s == -1 &&
-								current_room.exit_w == -1 &&
-								current_room.exit_e == -1 )
-						{
-							//The room has no adiacents rooms
-
-						}
-						else
-						{
-
-						}
+					case "north": //y +
+						//The room has no adiacents rooms
+						//TODO add random desc
+						exits[1] = current_room.room_id;
+						new_y = current_room.y + 1;
 						break;
 					case "south":
 						//Check rooms est west for their south exit_s
+						exits[0] = current_room.room_id;
+						new_y = current_room.y - 1;
 						break;
 					case "est":
-
+						exits[3] = current_room.room_id;
+						new_x = current_room.x + 1;
 						break;
 					case "west":
-
+						exits[4] = current_room.room_id;
+						new_x = current_room.x - 1;
 						break;
 				}
+
+				console.log("----------------- check where to move ---------------");
+
+				//Check where i want to move
+				databaseCtrl.getRoomByPos(new_x, new_y, (err, room) => {
+					if(err)
+					{
+						console.log("getRoomByPos: ", err);
+					}
+					else
+					{
+						if(room)
+						{
+							console.log("----------------- room already exist ---------------");
+							console.log("move room: ", room);
+							console.log("current_room id: ", current_room.room_id);
+							console.log("room id: ", room.room_id);
+							console.log("----------------- room already exist ---------------");
+
+							databaseCtrl.connectRooms(current_room.room_id, room.room_id, direction, (err, last_id)=>{
+								if(err){
+									console.log("err ", err);
+								}
+								else {
+									//Room already explored
+									EnterRoom(user, room.room_id);
+								}
+							});
+						}
+						else
+						{
+							//make new room
+							//connect the two
+							databaseCtrl.createRoom("new room", "rand desc " + direction, exits[0], exits[1], exits[2],  exits[3], new_x, new_y, (err, last_id) => {
+								if(err)
+								{
+									console.log("error creating room: ", err);
+								}
+								else
+								{
+									databaseCtrl.connectRooms(current_room.room_id, last_id, direction, (err, id)=>{
+										if(err){
+											console.log("err ", err);
+										}
+										else {
+											//Room already explored
+											EnterRoom(user, last_id);
+										}
+									});
+								}
+							});
+						}
+					}
+				});
 			}
 
 			console.log("a socket connected ", socket.id);
@@ -238,7 +305,8 @@ class Worker extends SCWorker {
 
 							if(next_room_id == -1)
 							{
-								CreateAndEnterRoom(user, row, next_room_id);
+								CreateAndEnterRoom(user, row, direction);
+								respond(null, "You take the " + direction + "path.");
 							}
 							else if (next_room_id == 0)
 							{
@@ -258,7 +326,7 @@ class Worker extends SCWorker {
 			}) ;
 
 			socket.on("make_room", (err, data) => {
-				databaseCtrl.createRoom("test", "desc_test", 0, 0, 0, 0, (err, data) => {
+				databaseCtrl.createRoom("test", "desc_test", 0, 0, 0, 0, 0, 0, (err, data) => {
 					if(err){
 						console.log(err);
 					}
