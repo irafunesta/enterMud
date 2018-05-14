@@ -160,6 +160,19 @@ const CtrDb = {
 
 		this.insert(query, values, call_back);
 	},
+	createCharacter(user_id, energy, hp, call_back)
+	{
+		let query = `INSERT INTO characters(user_id, energy, hp)
+		VALUES (?, ?, ?)`;
+		let values = [user_id, energy, hp];
+
+		this.insert(query, values, call_back);
+	},
+	gerCharacter(user_id, call_back)
+	{
+		let q = `SELECT * FROM characters WHERE user_id = ${user_id}`;
+		this.queryGet(q, call_back);
+	},
 	getRoomByPos(x, y, call_back)
 	{
 		let q = `SELECT * FROM rooms WHERE x = ${x} AND y = ${y}`;

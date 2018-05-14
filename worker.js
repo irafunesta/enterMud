@@ -79,23 +79,12 @@ class Worker extends SCWorker {
 
 
     var count = 0;
-		// var players = [];
-		// var roomW = 400;
-		// var roomH = 400;
-		var rooms = [{
-			"id": 0,
-			"name": "Old City Center",
-			"desc": "You are in the old city Center",
-			"actors": [],
-			"north": 1
-		},{
-			"id": 1,
-			"name": "Old City Fountain",
-			"desc": "You are in the old city fountain",
-			"actors": [],
-			"south": 0
-		}];
-		// var socketAuth = false;
+		//All the rooms have 4 exit, 1 may be Blocked
+		//They have a floor and a ceiling
+		//
+		var rooms_desc = [
+			""
+		];
 		var logged_users = [];
 		var tmp_user_name = "";
     /*
@@ -120,16 +109,17 @@ class Worker extends SCWorker {
 					{
 						console.log("Retreived rooms: ", row);
 						if(row) {
-							//The next room exist
+							//Get the logged user
 							let user = logged_users.find((user) => {
 								return user.socId == socket.id;
 							});
+							//Update the in memory user room
 							user.room = row.room_id;
 
 							databaseCtrl.updateUserRoom(user.user_name, row.room_id, (err, d) => {
 								if(err) console.log("err: ", err);
 							});
-							//EnterRoom(user, row.exit_n);
+							//Write room description
 							socket.emit("rand", row.desc);
 						}
 					}
@@ -325,13 +315,13 @@ class Worker extends SCWorker {
 				});
 			}) ;
 
-			socket.on("make_room", (err, data) => {
-				databaseCtrl.createRoom("test", "desc_test", 0, 0, 0, 0, 0, 0, (err, data) => {
-					if(err){
-						console.log(err);
-					}
-				});
-			});
+			// socket.on("make_room", (err, data) => {
+			// 	databaseCtrl.createRoom("test", "desc_test", 0, 0, 0, 0, 0, 0, (err, data) => {
+			// 		if(err){
+			// 			console.log(err);
+			// 		}
+			// 	});
+			// });
 
 			// socket.on("move", function(pos) {
 			//   //console.log("move: " + pos, socket.id);
@@ -458,17 +448,40 @@ class Worker extends SCWorker {
 					{
 						if(lastID)
 						{
+							let new_char_e = 0;
+							let new_char_hp = 100;
 							//user registered
-							//respond(null, "Username registered. ")
-							let username = new_user_name;
-							respond(null, {"user_name":username, "id":username});
-							socket.setAuthToken({"user_name":username, "socId":socket.id});
-							logged_users.push({"user_name":username, "socId":socket.id, "room":1});
+							databaseCtrl.createCharacter(lastID, new_char_e, new_char_hp, (err, data) => {
+								if(err) {
+									console.log("character creation err: ", err);
+									respond(err);
+								}
+								else {
+									let username = new_user_name;
+									respond(null, {
+										"user_name":username,
+										"id":username,
+										"energy": new_char_e,
+										"hp" : new_char_hp
+									});
 
-							EnterRoom(logged_users[logged_users.length-1], 1);
+									let user = {
+										"user_name" : username,
+										"socId":socket.id,
+										"room": 1,
+										"energy": new_char_e,
+										"hp" : new_char_hp
+									}
 
-							console.log("user ", username, " logged in");
-							publishChat(socket, username + " logged in.");
+									socket.setAuthToken(user);
+									logged_users.push(user);
+
+									EnterRoom(logged_users[logged_users.length-1], 1);
+
+									console.log("user ", username, " logged in");
+									publishChat(socket, username + " logged in.");
+								}
+							});
 						}
 					}
 				});
@@ -479,8 +492,10 @@ class Worker extends SCWorker {
 				let cryPswd = saltPswd(salt, pswd);
 				console.log("tmp user_name: ", tmp_user_name);
 				//Check if username is present in the db
-				var query = `SELECT user_id, user_name, room FROM users WHERE password = '${cryPswd}'
-					AND user_name = '${tmp_user_name}'`;
+				var query = `SELECT *
+					FROM users
+					INNER JOIN characters on characters.user_id = users.user_id
+					WHERE password = '${cryPswd}'AND user_name = '${tmp_user_name}'`;
 				databaseCtrl.queryGet(query, (err, row) => {
 					if(err)
 					{
@@ -492,16 +507,30 @@ class Worker extends SCWorker {
 					{
 						if(row) {
 							let username = row.user_name;
-							respond(null, {"user_name":username, "id":username});
-							socket.setAuthToken({"user_name":username, "socId":socket.id});
-							// socketAuth = true;
-							logged_users.push({"user_name":username, "socId":socket.id, "room":row.room});
-
-							EnterRoom(logged_users[logged_users.length-1], row.room);
+							respond(null, {
+								"user_name":username,
+								"id":username,
+								"room": row.room,
+								"energy": row.energy,
+								"hp" : row.hp
+							});
 
 							console.log("user ", username, " logged in");
 							publishChat(socket, username + " logged in.");
 							tmp_user_name = "";
+
+							let user = {
+								"user_name" : username,
+								"socId":socket.id,
+								"room": row.room,
+								"energy": row.energy,
+								"hp" : row.hp
+							}
+
+							socket.setAuthToken(user);
+							logged_users.push(user);
+
+							EnterRoom(logged_users[logged_users.length-1], row.room);
 						}
 						else {
 							respond("Wrong Password.");
@@ -533,12 +562,12 @@ class Worker extends SCWorker {
 						console.log("remove logged player");
 						let log_user = logged_users[pid];
 						//TODO save last room and stuff
-						databaseCtrl.update("UPDATE users SET room = ? WHERE user_name = " + log_user.user_name, [log_user.room], (err, last_id) => {
-							if(err)
-							{
-								console.log("Error updating user ",log_user.user_name,"last room ", err);
-							}
-						});
+						// databaseCtrl.update("UPDATE users SET room = ? WHERE user_name = " + log_user.user_name, [log_user.room], (err, last_id) => {
+						// 	if(err)
+						// 	{
+						// 		console.log("Error updating user ",log_user.user_name,"last room ", err);
+						// 	}
+						// });
 						logged_users.splice(pid, 1);
 						console.log("logged in players: ", logged_users);
 					}
