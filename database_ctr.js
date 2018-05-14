@@ -173,6 +173,21 @@ const CtrDb = {
 		let q = `SELECT * FROM characters WHERE user_id = ${user_id}`;
 		this.queryGet(q, call_back);
 	},
+	updateCharacter(user_id, energy, hp, call_back)
+	{
+		let q = `UPDATE characters
+			SET energy = ${energy}, hp = ${hp}
+			WHERE user_id = ${user_id}`;
+		this.update(q, [], call_back);
+	},
+	getRoomItems(room_id, call_back)
+	{
+		let q = `SELECT items.item_id, name, desc 
+			FROM room_items
+			INNER JOIN items ON items.item_id = room_items.item_id
+			where room_id = ${room_id}`;
+		this.queryEach(q, call_back);
+	},
 	getRoomByPos(x, y, call_back)
 	{
 		let q = `SELECT * FROM rooms WHERE x = ${x} AND y = ${y}`;

@@ -9,8 +9,8 @@ var scCodecMinBin = require('sc-codec-min-bin');
 var databaseCtrl = require('./database_ctr');
 var sha256 = require('js-sha256');
 
-function publishChat(socket, data) {
-	socket.exchange.publish('chat', {"id":socket.id, "data": data});
+function publishChat(channel, socket, data) {
+	socket.exchange.publish(channel, {"id":socket.id, "data": data});
 }
 
 function saltPswd(salt, pswd) {
@@ -120,7 +120,52 @@ class Worker extends SCWorker {
 								if(err) console.log("err: ", err);
 							});
 							//Write room description
-							socket.emit("rand", row.desc);
+							socket.emit("rand", "Yuo are in " + row.desc);
+
+							let channel_name = row.name +" "+ row.room_id;
+
+							if(socket.isSubscribed(channel_name))
+							{
+								socket.kickOut(channel_name);
+							}
+
+							socket.emit("room_subscribe",channel_name);
+
+							//list the object in the room
+							databaseCtrl.getRoomItems(room_id, (err, row) => {
+								if(err) {
+									console.log("getRoomItems err: ", err);
+								}
+								else {
+									if(row) {
+										socket.emit("item_found", {
+											"msg": "Yuo see a ",
+											"name": row.name,
+											"id": row.item_id,
+											"type": "item"
+										});
+									}
+								}
+							});
+
+							//list the players
+							logged_users.forEach((u) => {
+								if(u.socId != socket.id && u.room == user.room)
+								{
+									//socket.emit("rand", "Yuo see " + user.user_name);
+									socket.emit("item_found", {
+										"msg": "Yuo see ",
+										"name": u.user_name,
+										// "id": row.user_id,
+										"type": "player"
+									});
+								}
+							});
+							//Update the user status
+							socket.emit("user_update_status", {
+								"hp":user.hp,
+								"energy":user.energy
+							})
 						}
 					}
 				});
@@ -255,9 +300,16 @@ class Worker extends SCWorker {
 				socket.exchange.publish('updateGame', {"players":players,"current":socket.id});
 			}) ;
 
+			socket.on("room_entered", (channel_name) => {
+				let user = logged_users.find((user) => {
+					return user.socId == socket.id;
+				});
+
+				publishChat(channel_name, socket, `${user.user_name} arrived.`);
+			});
+
 			socket.on("move", function (direction, respond) {
 				// socket.emit("playerUp", {"players":players,"current":socket.id});
-				//TODO move to the north exit
 				let user = logged_users.find((user) => {
 					return user.socId == socket.id;
 				});
@@ -354,7 +406,7 @@ class Worker extends SCWorker {
 				if(socket.authToken != null && socket.authToken.user_name == data[0])
 				{
 					// console.log("auth true");
-					publishChat(socket, data[0] +": " + data[1]);
+					publishChat("chat", socket, data[0] +": " + data[1]);
 				}
 				else
 				{
@@ -467,6 +519,7 @@ class Worker extends SCWorker {
 
 									let user = {
 										"user_name" : username,
+										"user_id": lastID,
 										"socId":socket.id,
 										"room": 1,
 										"energy": new_char_e,
@@ -479,7 +532,7 @@ class Worker extends SCWorker {
 									EnterRoom(logged_users[logged_users.length-1], 1);
 
 									console.log("user ", username, " logged in");
-									publishChat(socket, username + " logged in.");
+									publishChat("chat", socket, username + " logged in.");
 								}
 							});
 						}
@@ -516,12 +569,13 @@ class Worker extends SCWorker {
 							});
 
 							console.log("user ", username, " logged in");
-							publishChat(socket, username + " logged in.");
+							publishChat("chat", socket, username + " logged in.");
 							tmp_user_name = "";
 
 							let user = {
 								"user_name" : username,
 								"socId":socket.id,
+								"user_id": row.user_id,
 								"room": row.room,
 								"energy": row.energy,
 								"hp" : row.hp
@@ -568,6 +622,11 @@ class Worker extends SCWorker {
 						// 		console.log("Error updating user ",log_user.user_name,"last room ", err);
 						// 	}
 						// });
+						databaseCtrl.updateCharacter(log_user.user_id, log_user.energy, log_user.hp, (err, data) => {
+							if(err) {
+								console.log("update char err: ", err);
+							}
+						});
 						logged_users.splice(pid, 1);
 						console.log("logged in players: ", logged_users);
 					}

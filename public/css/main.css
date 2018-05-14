@@ -29,7 +29,19 @@ body
 	padding: 10px;
 	display: block;
 }
-.whiteText
+.itemText
 {
-	color: white;
+	color: blue;
+}
+.docileEnemy
+{
+	color: orange;
+}
+.aggressiveEnemy
+{
+	color: red;
+}
+.playerText
+{
+	color: green;
 }

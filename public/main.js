@@ -53,6 +53,25 @@ MG = {};
 	  writeToConsole(data);
 	});
 
+	MG.socket.on('item_found', function (data) {
+	  console.log('item: ', data);
+	  writeToConsole(data, true);
+	});
+
+	MG.socket.on('actor_found', function (data) {
+	  console.log('RANDOM STREAM: ' + data);
+	  writeToConsole(data);
+	});
+
+	MG.socket.on('player_found', function (data) {
+	  console.log('RANDOM STREAM: ' + data);
+	  writeToConsole(data);
+	});
+
+	MG.socket.on('user_update_status', function (stats) {
+		updateStats(stats.hp, stats.energy);
+	});
+
 	MG.socket.on('noAuth', function (data) {
 	  writeToConsole("The current user is not authenticated");
 	});
@@ -80,6 +99,12 @@ MG = {};
 	MG.socket.on("deauth_client", () => {
 		console.log("deauthenticate client");
 		MG.socket.deauthenticate();
+		//TODO do other stuff
+	});
+
+	MG.socket.on("room_subscribe", (channel_name) => {
+		console.log("entered ", channel_name);
+		enterRoomChannel(channel_name);
 		//TODO do other stuff
 	});
 
@@ -119,6 +144,35 @@ function MovePlayer(direction)
 			writeToConsole(response);
 		}
 	});
+}
+
+function channelWatch(msg)
+{
+	var g = {
+		"msg":"",
+		"name" :msg.data,
+		"type" : "player"
+	}
+	writeToConsole(g, true);
+}
+
+function enterRoomChannel(room_channel)
+{
+	// "channel_name":row.name,
+	// "channel_id":row.id
+	var ch = MG.socket.subscribe(room_channel);
+	console.log("enterRoomChannel subscribe to ", room_channel);
+	ch.on('subscribeFail', function (err) {
+	  console.log(`Failed to subscribe to the ${room_channel} channel due to error: `, err);
+	});
+
+	ch.watch(channelWatch);
+
+	MG.socket.emit("room_entered", room_channel);
+}
+
+function publishChannel(channel, socket, data) {
+	socket.exchange.publish(channel, {"id":socket.id, "data": data});
 }
 
 function SendEvent(value)
@@ -270,8 +324,8 @@ function SendEvent(value)
 				case "w":
 					MovePlayer("west");
 					break;
-				case "mkr":
-					MG.socket.emit("make_room");
+				case "look":
+					// MG.socket.emit("make_room");
 					break;
 				default:
 					var token = MG.socket.getAuthToken();
@@ -304,13 +358,48 @@ function recivedMsg(resp)
 	writeToConsole(resp.data);
 }
 
-function writeToConsole(msg)
+function writeToConsole(msg, link = false)
 {
-	var p = document.createElement("li");
+	if(link == true)
+	{
+		var p = document.createElement("li");
+		var a = document.createElement("a");
 
-	p.appendChild(document.createTextNode(msg));
-	//mainScreen.firstElementChild()
-	mainScreen.appendChild(p);
+		//a.href = msg.id;
+		var className = "";
+		switch(msg.type)
+		{
+			case "item":
+				className = "itemText";
+				break;
+			case "enemy_docile":
+				className = "docileEnemy";
+				break;
+			case "player":
+				className = "playerText";
+				break;
+			case "enemy_aggressive":
+				className = "aggressiveEnemy";
+				break;
+		}
+
+		a.className = className;
+
+		a.appendChild(document.createTextNode(msg.name));
+
+		p.appendChild(document.createTextNode(msg.msg));
+		p.appendChild(a);
+		//mainScreen.firstElementChild()
+		mainScreen.appendChild(p);
+	}
+	else
+	{
+		var p = document.createElement("li");
+
+		p.appendChild(document.createTextNode(msg));
+		//mainScreen.firstElementChild()
+		mainScreen.appendChild(p);
+	}
 	updateScroll();
 }
 
